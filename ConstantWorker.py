@@ -9,22 +9,42 @@ bot = telebot(secrets.telegram_token)
 lock = False
 
 async def waitlock():
+	iter = 0
 	while lock:
-		await time.sleep(1)
-
+		iter +=1
+		await asyncio.sleep(1)
+		if iter >= 15:
+			print("Lock took too long to open, forcing it open")
+			break
 async def send_schedule(chat_id, value, json_data, schedule_cache):
 	print(f"Sending to {chat_id}")
-	group, day_sent, errored_out = value
+	group, day_sent, errored_out, subgroup = value
 	if group not in schedule_cache:
 		print(f"Fetching {group}")
 		schedule_cache[group] = get_schedule(group) #time, lesson, tutor, location
-	schedule = schedule_cache[group]
-	t = datetime.datetime.now()
-	message = "\n\n".join([f"{t.day}.{t.month}.{t.year}"]+[f"""{lesson['time']}
+	schedules = schedule_cache[group]
+	today = datetime.datetime.now()
+	tomorrow = datetime.datetime.now() + datetime.timedelta(days = 1)
+
+	if subgroup: #nesting ew
+		for schedule in schedules:
+			to_remove = []
+			for lesson in schedule:
+				if lesson['lesson'].endswith(" пг. ") and not lesson['lesson'].endswith(f"{subgroup} пг. "):
+					to_remove.append(lesson)
+			for removed_element in to_remove:
+				schedule.remove(removed_element)
+
+	tomorrow_message = "\n\n".join([f"Расписание на завтра ({tomorrow.day}.{tomorrow.month}.{tomorrow.year}):"]+[f"""{lesson['time']}
 {lesson['lesson']}
 {lesson['tutor']}
-{lesson['location']}""" for lesson in schedule])
-	await bot.send_message(chat_id, message)
+{lesson['location']}""" for lesson in schedules[1]])
+	today_message = "\n\n".join([f"Расписание на сегодня ({today.day}.{today.month}.{today.year}):"]+[f"""{lesson['time']}
+{lesson['lesson']}
+{lesson['tutor']}
+{lesson['location']}""" for lesson in schedules[0]])
+	await bot.send_message(chat_id, tomorrow_message)
+	await bot.send_message(chat_id, today_message)
 	print(f"Sent to {chat_id}")
 
 async def timer():
@@ -70,14 +90,36 @@ async def timer():
 			with open("subscribers.json", "w") as f:
 				f.write(json.dumps(json_data))
 		lock = False
-		await asyncio.sleep(60*1)
+		await asyncio.sleep(5) #TODO CHANGE BACK
 	return
 
-@bot.message_handler(commands = ["start", "unsubscribe", "subscribe", "stats"])
+@bot.message_handler(commands = ["start", "unsubscribe", "subscribe", "stats", "setsubgroup"])
 async def command_handler(message):
 	command = message.text.split(" ")[0].replace("/", "", 1)
 	command = globals()[command] #Dont hack me please!
 	await command(message)
+
+async def setsubgroup(message):
+	global lock
+	await waitlock(); lock = True
+	if os.path.exists("subscribers.json"):
+		with open("subscribers.json", "r") as f:
+			json_data = json.load(f)
+	else:
+		json_data = {}
+	if message.chat.id not in json_data:
+		await bot.reply_to(message, "Подпишись сначала на рассылку чтоль...")
+		lock = False
+		return
+	if message.text not in ["/setsubgroup 1", "/setsubgroup 2"]:
+		await bot.reply_to(message, "Может быть только две подгруппы.")
+		lock = False
+		return
+	json_data[str(message.chat.id)][3] = 1 if message.text.endswith("1") else 2
+	with open("subscribers.json", "w") as f:
+		json.dump(json_data, f)
+	lock = False
+	await bot.reply_to(message, f"Теперь ты в {1 if message.text.endswith('1') else 2} подгруппе")
 
 async def stats(message):
 	if os.path.exists("subscribers.json"):
@@ -120,15 +162,15 @@ async def subscribe(message):
 		await bot.reply_to(message, "Так ты уже на чёт подписан. Отпишись сначала /unsubscribe")
 		lock = False
 		return
-	json_data[str(message.chat.id)] = (group, -1, False)
+	json_data[str(message.chat.id)] = (group, -1, False, False)
 	with open("subscribers.json", "w") as f:
 		f.write(json.dumps(json_data))
-	await bot.reply_to(message, "Спасибо что использовал меня, отправлю расписание в течении 5 минут. Когда тебя отчислят напиши /unsubscribe, окей?")
+	await bot.reply_to(message, "Спасибо что использовал меня, отправлю расписание в течении 5 минут.\nТы можешь указать подгруппу введя команду /setsubgroup (тут 1 или 2).\nКогда тебя отчислят напиши /unsubscribe, окей?")
 	lock = False
 
 async def start(message):
 	await bot.reply_to(message, """VGLTU-Schedule - это телеграм бот, который собирает расписание из сайта и отсылает примерно вам в час ночи.
-Для того, чтобы начать получать расписание напишите /subscribe <ВАША ГРУППА>. Пишите как на сайте, включая заглавные буквы.
+Для того, чтобы начать получать расписание напишите /subscribe ВАША_ГРУППА. Пишите как на сайте, включая заглавные буквы.
 
 VGLTU-Schedule  Copyright (C) 2024  Fun_Dan3
 Эта программа не предоставляет АБСОЛЮТНО НИКАКИХ ГАРАНТИЙ.
@@ -141,7 +183,8 @@ VGLTU-Schedule  Copyright (C) 2024  Fun_Dan3
 async def start_bot():
 	try:
 		await asyncio.gather(bot.infinity_polling(), timer())
-	except Exception:
+	except Exception as e:
+		print(f"Closing due to {e}")
 		await bot.close()
 asyncio.run(start_bot())
 
