@@ -90,7 +90,7 @@ async def timer():
 			with open("subscribers.json", "w") as f:
 				f.write(json.dumps(json_data))
 		lock = False
-		await asyncio.sleep(5) #TODO CHANGE BACK
+		await asyncio.sleep(60*5)
 	return
 
 @bot.message_handler(commands = ["start", "unsubscribe", "subscribe", "stats", "setsubgroup"])
@@ -107,7 +107,7 @@ async def setsubgroup(message):
 			json_data = json.load(f)
 	else:
 		json_data = {}
-	if message.chat.id not in json_data:
+	if str(message.chat.id) not in json_data:
 		await bot.reply_to(message, "Подпишись сначала на рассылку чтоль...")
 		lock = False
 		return
