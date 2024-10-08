@@ -91,7 +91,11 @@ async def timer():
 			with open("subscribers.json", "w") as f:
 				f.write(json.dumps(json_data))
 		lock = False
+<<<<<<< HEAD
 		await asyncio.sleep(60*5)
+=======
+		await asyncio.sleep(60*5) #TODO CHANGE BACK
+>>>>>>> fce974359b827bbe57b813b521fbc2b00e2a6883
 	return
 
 @bot.message_handler(commands = ["start", "unsubscribe", "subscribe", "stats", "setsubgroup"])
