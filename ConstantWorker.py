@@ -16,6 +16,7 @@ async def waitlock():
 		if iter >= 15:
 			print("Lock took too long to open, forcing it open")
 			break
+
 async def send_schedule(chat_id, value, json_data, schedule_cache):
 	print(f"Sending to {chat_id}")
 	group, day_sent, errored_out, subgroup = value
@@ -177,7 +178,7 @@ VGLTU-Schedule  Copyright (C) 2024  Fun_Dan3
 Лицензия: https://raw.githubusercontent.com/FunDan3/VGLTU-Schedule/refs/heads/main/LICENSE.
 
 Если есть проблемы или предложения пишите @fun_dan3.
-Это бета версия бота, не надейтесь на многое
+Это бета версия бота, не надейтесь на многое.
 """)
 
 async def start_bot():
