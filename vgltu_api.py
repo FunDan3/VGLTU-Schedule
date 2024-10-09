@@ -7,10 +7,12 @@ ua = UserAgent()
 cDay = lambda: datetime.datetime.now().day
 
 groups_cache = {"day": cDay(), "cache": {}}
-teachers_cache = {"day": cDay(), "cache": {}}
+teachers_cache = {"day": cDay(), "cache": []}
+api_url = "https://apivgltu2.ru"
 
 def _request_get(url):
 	response = requests.get(url, timeout = 15, headers = {"User-Agent": ua.random})
+	print(f"{url} -> {response}")
 	return response.content
 
 def get_teachers():
@@ -28,7 +30,7 @@ def get_groups():
 	if groups_cache["day"]!=cDay():
 		groups_cache["cache"] = {}
 	if not groups_cache["cache"]:
-		groups_cache["cache"] = json.loads(_request_get("https://api.vgltu.ru/s/param_list?param=group_name")) #not quite safe but worst case scenario is my server overloading
+		groups_cache["cache"] = json.loads(_request_get(f"{api_url}/s/param_list?param=group_name")) #not quite safe but worst case scenario is my server overloading
 	return groups_cache["cache"]
 
 def get_schedule(group): #THIS function SUCKS!!!!!!!!!!!!!!
@@ -43,25 +45,28 @@ def get_schedule(group): #THIS function SUCKS!!!!!!!!!!!!!!
 				return False
 		return True
 	def extract_full_teacher(teacher):
-		teacher = teacher.replace(".", " ")
-		teacher = teacher[:len(teacher)-1]
-		teacher_sirname, teacher_name1, teacher_name2 = teacher.split(" ")
-		for probable_teacher in get_teachers():
-			if not probable_teacher or len(probable_teacher[0].split(" "))!=3:
-				continue
-			probable_teacher_sirname, probable_teacher_name1, probable_teacher_name2 = probable_teacher[0].split(" ")
-			if teacher_sirname == probable_teacher_sirname and probable_teacher_name1.startswith(teacher_name1) and probable_teacher_name2.startswith(teacher_name2):
-				return probable_teacher[0]
-		return teacher
+		try:
+			teacher = teacher.replace(".", " ")
+			teacher = teacher[:len(teacher)-1]
+			teacher_sirname, teacher_name1, teacher_name2 = teacher.split(" ")
+			for probable_teacher in get_teachers():
+				if not probable_teacher or len(probable_teacher[0].split(" "))!=3:
+					continue
+				probable_teacher_sirname, probable_teacher_name1, probable_teacher_name2 = probable_teacher[0].split(" ")
+				if teacher_sirname == probable_teacher_sirname and probable_teacher_name1.startswith(teacher_name1) and probable_teacher_name2.startswith(teacher_name2):
+					return probable_teacher[0]
+			return teacher
+		except Exception:
+			return teacher
 	start_date = datetime.datetime.now()
 	end_date = start_date + datetime.timedelta(days = 1)
 	s = start_date; e = end_date
-	data = _request_get(f"https://api.vgltu.ru/s/schedule?date_start={s.year}-{s.month}-{s.day}&date_end={e.year}-{e.month}-{e.day}&group_name={group}") #their website is broken and cant show just 1 day LOL
+	data = _request_get(f"{api_url}/schedule?date_start={s.year}-{s.month}-{s.day}&date_end={e.year}-{e.month}-{e.day}&group_name={group}") #their website is broken and cant show just 1 day LOL
 
 	#Parsing goes afterwards. I suck at that
 
 	schedules = []
-
+	print(data)
 	soup = bs(data, "html.parser")
 	for table in soup.find_all("table"):
 		schedule = []
@@ -97,5 +102,3 @@ def get_schedule(group): #THIS function SUCKS!!!!!!!!!!!!!!
 				raise ValueError("Unexpected amount of lesson values")
 		schedules.append(schedule)
 	return schedules
-
-print(get_schedule("ИС2-242-ОБ"))

@@ -4,6 +4,7 @@ import telebot as telegramlib
 from vgltu_api import get_schedule, get_groups
 import os, asyncio, json, datetime
 import secrets
+import traceback
 
 bot = telebot(secrets.telegram_token)
 lock = False
@@ -22,7 +23,7 @@ async def send_schedule(chat_id, value, json_data, schedule_cache):
 	group, day_sent, errored_out, subgroup = value
 	if group not in schedule_cache:
 		print(f"Fetching {group}")
-		schedule_cache[group] = get_schedule(group) #time, lesson, tutor, location
+		schedule_cache[group] = get_schedule(group) #time, lesson, teacher, location
 	schedules = schedule_cache[group]
 	today = datetime.datetime.now()
 	tomorrow = datetime.datetime.now() + datetime.timedelta(days = 1)
@@ -35,14 +36,14 @@ async def send_schedule(chat_id, value, json_data, schedule_cache):
 					to_remove.append(lesson)
 			for removed_element in to_remove:
 				schedule.remove(removed_element)
-
+	print(schedules)
 	tomorrow_message = "\n\n".join([f"Расписание на завтра ({tomorrow.day}.{tomorrow.month}.{tomorrow.year}):"]+[f"""{lesson['time']}
 {lesson['lesson']}
-{lesson['tutor']}
+{lesson['teacher']}
 {lesson['location']}""" for lesson in schedules[1]])
 	today_message = "\n\n".join([f"Расписание на сегодня ({today.day}.{today.month}.{today.year}):"]+[f"""{lesson['time']}
 {lesson['lesson']}
-{lesson['tutor']}
+{lesson['teacher']}
 {lesson['location']}""" for lesson in schedules[0]])
 	await bot.send_message(chat_id, tomorrow_message)
 	await bot.send_message(chat_id, today_message)
@@ -70,16 +71,16 @@ async def timer():
 				try:
 					await send_schedule(chat_id, value, json_data, schedule_cache)
 					json_data[chat_id][1] = datetime.datetime.now().day
-					json_data[chat_id][2] = False #Errored out
+					json_data[chat_id][2] = "" #Errored out
 					changed_json = True
 					await asyncio.sleep(1)
-				except Exception as e:
-					print(f"{e}: {chat_id}: {value}")
+				except Exception:
+					print(traceback.format_exc())
 					if not json_data[chat_id][2]:
-						json_data[chat_id][2] = True #Errored out
+						json_data[chat_id][2] = traceback.format_exc() #Errored out
 						changed_json = True
 						try:
-							await bot.send_message(chat_id, "Произошла ошибка. Если вы имеете доступ к вебсайту университета напишите @fundan3\n"+str(e))
+							await bot.send_message(chat_id, "Произошла ошибка. Если вы имеете доступ к вебсайту университета напишите @fundan3\n"+traceback.format_exc())
 						except telegramlib.asyncio_helper.ApiTelegramException as e:
 							if "403" in str(e):
 								to_remove.append(chat_id)
@@ -162,7 +163,7 @@ async def subscribe(message):
 		await bot.reply_to(message, "Так ты уже на чёт подписан. Отпишись сначала /unsubscribe")
 		lock = False
 		return
-	json_data[str(message.chat.id)] = (group, -1, False, False)
+	json_data[str(message.chat.id)] = (group, -1, "", False)
 	with open("subscribers.json", "w") as f:
 		f.write(json.dumps(json_data))
 	await bot.reply_to(message, "Спасибо что использовал меня, отправлю расписание в течении 5 минут.\nТы можешь указать подгруппу введя команду /setsubgroup (тут 1 или 2).\nКогда тебя отчислят напиши /unsubscribe, окей?")
